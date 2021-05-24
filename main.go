@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
@@ -36,24 +38,26 @@ func init() {
 }
 
 func main() {
-	CheckSAML()
+	lambda.Start(CheckSAML)
 }
 
-func CheckSAML() {
+func CheckSAML(ctx context.Context) (err error) {
 	log.Println("Call IAM ListSAMLProviders")
 	input := iam.ListSAMLProvidersInput{}
 	output, err := svcIam.ListSAMLProviders(&input)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Printf(err.Error())
+		return
 	}
 	count := len(output.SAMLProviderList)
 	log.Printf("Provider Count: %d", count)
 	if count > 0 {
-		SendEmail(*output)
+		err = SendEmail(*output)
 	}
+	return
 }
 
-func SendEmail(saml iam.ListSAMLProvidersOutput) {
+func SendEmail(saml iam.ListSAMLProvidersOutput) (err error) {
 	log.Println("Call SNS Publish")
 	content := fmt.Sprintf(`
 	Identity providers creation detected!.
@@ -66,12 +70,11 @@ func SendEmail(saml iam.ListSAMLProvidersOutput) {
 	input := sns.PublishInput{
 		TopicArn: aws.String(topicSns),
 		Subject:  aws.String("Warning - Identity providers created"),
-		// MessageStructure: aws.String("json"),
-		Message: aws.String(content),
+		Message:  aws.String(content),
 	}
-	_, err := svcSns.Publish(&input)
+	_, err = svcSns.Publish(&input)
 	if err != nil {
-		log.Fatalln(err.Error())
+		log.Println(err.Error())
 	}
-
+	return
 }
