@@ -17,14 +17,16 @@ var (
 	svcIam   *iam.IAM
 	svcSns   *sns.SNS
 	topicSns string
+	region   string
 )
 
 func init() {
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("Initialize IAM Introspect")
+	region = os.Getenv("INTROSPECT_REGION")
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("ap-southeast-1"),
+		Region: aws.String(region),
 	})
 
 	if err != nil {
@@ -46,27 +48,38 @@ func CheckSAML(ctx context.Context) (err error) {
 	input := iam.ListSAMLProvidersInput{}
 	output, err := svcIam.ListSAMLProviders(&input)
 	if err != nil {
-		log.Printf(err.Error())
+		log.Println(err.Error())
 		return
 	}
-	count := len(output.SAMLProviderList)
-	log.Printf("Provider Count: %d", count)
-	if count > 0 {
-		err = SendEmail(*output)
+
+	for _, provider := range output.SAMLProviderList {
+		errDelete := DeleteSAML(provider)
+		if errDelete != nil {
+			err = errDelete
+			log.Println(err.Error())
+			return
+		}
+		errEmail := SendEmail(*provider.Arn)
+		if errEmail != nil {
+			err = errEmail
+			log.Println(err.Error())
+			return
+		}
 	}
 	return
 }
 
-func SendEmail(saml iam.ListSAMLProvidersOutput) (err error) {
+func SendEmail(samlArn string) (err error) {
 	log.Println("Call SNS Publish")
 	content := fmt.Sprintf(`
 	Identity providers creation detected!.
-	Identity Providers List : %+v
+	Following Identity Provider is deleted : 
+	%+v
 
 	To Do:
 	1. Notify Security Team
-	2. Remove Identity providers via AWS Console - IAM
-	`, saml.SAMLProviderList)
+	2. Check any IAM User and IAM Role in the account
+		`, samlArn)
 	input := sns.PublishInput{
 		TopicArn: aws.String(topicSns),
 		Subject:  aws.String("Warning - Identity providers created"),
@@ -75,6 +88,18 @@ func SendEmail(saml iam.ListSAMLProvidersOutput) (err error) {
 	_, err = svcSns.Publish(&input)
 	if err != nil {
 		log.Println(err.Error())
+	}
+	return
+}
+
+func DeleteSAML(saml *iam.SAMLProviderListEntry) (err error) {
+	input := iam.DeleteSAMLProviderInput{
+		SAMLProviderArn: saml.Arn,
+	}
+	_, err = svcIam.DeleteSAMLProvider(&input)
+	if err != nil {
+		log.Println(err.Error())
+		return
 	}
 	return
 }
