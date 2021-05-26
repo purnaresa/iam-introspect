@@ -21,4 +21,10 @@ run folowing command
 
 3. Deploy this application to Lambda and assign the IAM Role created from number 2
 
-4. Create a EventBridge trigger by 1 minute interval
+4. Configure Lambda Environment variable
+
+- Set INTROSPECT_REGION with the region
+
+- Set INTROSPECT_SNS_TOPIC with the SNS topic created from number 1
+
+5. Create a EventBridge trigger by 1 minute interval
