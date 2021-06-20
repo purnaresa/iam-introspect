@@ -9,9 +9,9 @@ run folowing command
 
 **How to Deploy**
 
-1. Create SNS Topic for Email Notification
+1. Create SNS Topic for Email Notification (example name: idp-creation-notification)
 
-2. Create IAM Role with Policy contains following permission
+2. Create IAM Role with Policy contains following permission (example policy: idp-removal-policy, role: idp-removal-role)
 
 - Publish to SNS Topic
 
